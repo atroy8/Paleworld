@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Outbreak: City Grid</title>
+  <style>
+    body {
+      font-family: monospace;
+      background-color: #121212;
+      color: #eee;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+    #startScreen, #howToPlay, #endScreen {
+      display: none;
+      padding: 40px;
+    }
+    #gameScreen { display: none; }
+    #gameContainer {
+      margin: 20px auto;
+      display: grid;
+      grid-template-columns: repeat(6, 40px);
+      grid-gap: 4px;
+      justify-content: center;
+    }
+    .tile {
+      width: 40px;
+      height: 40px;
+      background-color: #444;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+    .infected { background-color: red; }
+    .vaccinated { background-color: limegreen; }
+    .dead { background-color: black; }
+    .healthy { background-color: #666; }
+    #ui {
+      margin-top: 20px;
+    }
+    button {
+      margin: 10px;
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    h1, h2 { margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div id="startScreen">
+    <h1>🧬 Outbreak: City Grid</h1>
+    <p>Can you stop the infection and save lives?</p>
+    <button onclick="showHowToPlay()">How to Play</button>
+    <button onclick="startGame()">Start Game</button>
+  </div>
+
+  <div id="howToPlay">
+    <h2>How to Play</h2>
+    <p>Click on healthy people to vaccinate them before the infection spreads.<br>
+    Infection spreads to adjacent cells each round. Some infected may die.<br>
+    Your goal: Save as many lives as possible!</p>
+    <button onclick="startGame()">Let’s Go!</button>
+  </div>
+
+  <div id="gameScreen">
+    <div id="ui">
+      <div>Level: <span id="level">1</span></div>
+      <div>Round: <span id="round">1</span></div>
+      <div>Vaccines Left: <span id="vaccines">3</span></div>
+      <button onclick="nextRound()">Next Round</button>
+      <button onclick="restartGame()">Restart</button>
+    </div>
+    <div id="gameContainer"></div>
+  </div>
+
+  <div id="endScreen">
+    <h2 id="endMessage"></h2>
+    <button onclick="nextLevel()">Next Level</button>
+    <button onclick="restartGame()">Play Again</button>
+  </div>
+
+  <script>
+    let level = 1;
+    let size = 6;
+    let round = 1;
+    let vaccines = 3;
+    let grid = [];
+
+    const bgMusic = new Audio("https://cdn.pixabay.com/audio/2023/03/29/audio_8c5c33a9ec.mp3");
+    bgMusic.loop = true;
+    bgMusic.volume = 0.2;
+
+    function playTone(frequency, duration = 200, type = 'square', volume = 0.2) {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+      gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + duration / 1000);
+    }
+
+    function showHowToPlay() {
+      document.getElementById("startScreen").style.display = "none";
+      document.getElementById("howToPlay").style.display = "block";
+    }
+
+    function startGame() {
+      document.getElementById("startScreen").style.display = "none";
+      document.getElementById("howToPlay").style.display = "none";
+      document.getElementById("endScreen").style.display = "none";
+      document.getElementById("gameScreen").style.display = "block";
+      bgMusic.play();
+      restartGame();
+    }
+
+    function createGrid() {
+      grid = [];
+      const container = document.getElementById("gameContainer");
+      container.innerHTML = "";
+      container.style.gridTemplateColumns = `repeat(${size}, 40px)`;
+
+      for (let i = 0; i < size * size; i++) {
+        const state = "healthy";
+        grid.push(state);
+
+        const div = document.createElement("div");
+        div.className = `tile ${state}`;
+        div.dataset.index = i;
+        div.onclick = () => vaccinate(i);
+        container.appendChild(div);
+      }
+
+      const patientZero = Math.floor(Math.random() * grid.length);
+      grid[patientZero] = "infected";
+      updateGrid();
+    }
+
+    function updateGrid() {
+      const tiles = document.querySelectorAll(".tile");
+      tiles.forEach((tile, i) => {
+        tile.className = `tile ${grid[i]}`;
+        tile.textContent = grid[i] === "infected" ? "X" : "";
+      });
+      document.getElementById("level").textContent = level;
+      document.getElementById("round").textContent = round;
+      document.getElementById("vaccines").textContent = vaccines;
+    }
+
+    function vaccinate(index) {
+      if (vaccines > 0 && grid[index] === "healthy") {
+        grid[index] = "vaccinated";
+        vaccines--;
+        playTone(880, 150);
+        updateGrid();
+      }
+    }
+
+    function nextRound() {
+      round++;
+      vaccines = level === 1 ? 3 : level === 2 ? 2 : 1;
+      let newGrid = [...grid];
+      let newInfections = 0;
+
+      grid.forEach((cell, i) => {
+        if (cell === "infected") {
+          const neighbors = getNeighbors(i);
+          neighbors.forEach(n => {
+            const infectionRate = level === 1 ? 0.3 : level === 2 ? 0.4 : 0.5;
+            if (grid[n] === "healthy" && Math.random() < infectionRate) {
+              newGrid[n] = "infected";
+              newInfections++;
+              playTone(300, 100, 'sawtooth');
+            }
+          });
+          const fatalityRate = level === 1 ? 0.2 : level === 2 ? 0.3 : 0.4;
+          if (Math.random() < fatalityRate) newGrid[i] = "dead";
+        }
+      });
+      grid = newGrid;
+      updateGrid();
+      checkEndConditions();
+    }
+
+    function checkEndConditions() {
+      const stillInfected = grid.includes("infected");
+      const survivors = grid.filter(x => x === "healthy" || x === "vaccinated").length;
+
+      if (!stillInfected || survivors === 0) {
+        document.getElementById("gameScreen").style.display = "none";
+        document.getElementById("endScreen").style.display = "block";
+        const endMsg = !stillInfected ? "🎉 You stopped the infection!" : "💀 Everyone was infected or died.";
+        document.getElementById("endMessage").innerText = endMsg;
+        bgMusic.pause();
+        bgMusic.currentTime = 0;
+      }
+    }
+
+    function getNeighbors(index) {
+      const row = Math.floor(index / size);
+      const col = index % size;
+      const neighbors = [];
+      for (let r = -1; r <= 1; r++) {
+        for (let c = -1; c <= 1; c++) {
+          if (r === 0 && c === 0) continue;
+          const newRow = row + r;
+          const newCol = col + c;
+          if (newRow >= 0 && newRow < size && newCol >= 0 && newCol < size) {
+            neighbors.push(newRow * size + newCol);
+          }
+        }
+      }
+      return neighbors;
+    }
+
+    function restartGame() {
+      level = 1;
+      round = 1;
+      vaccines = 3;
+      size = 6;
+      document.getElementById("endScreen").style.display = "none";
+      document.getElementById("gameScreen").style.display = "block";
+      createGrid();
+    }
+
+    function nextLevel() {
+      if (level < 3) {
+        level++;
+        round = 1;
+        vaccines = level === 2 ? 2 : 1;
+        size = level === 2 ? 8 : 10;
+        document.getElementById("endScreen").style.display = "none";
+        document.getElementById("gameScreen").style.display = "block";
+        createGrid();
+      } else {
+        restartGame();
+      }
+    }
+
+    document.getElementById("startScreen").style.display = "block";
+  </script>
+</body>
+</html>
