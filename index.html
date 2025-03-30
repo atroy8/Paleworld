@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -122,7 +123,14 @@
       document.getElementById("howToPlay").style.display = "none";
       document.getElementById("endScreen").style.display = "none";
       document.getElementById("gameScreen").style.display = "block";
-      bgMusic.play();
+
+      bgMusic.play().catch((e) => {
+        console.log("Autoplay blocked, waiting for user interaction.");
+        document.body.addEventListener('click', () => {
+          bgMusic.play();
+        }, { once: true });
+      });
+
       restartGame();
     }
 
